@@ -12,7 +12,7 @@ Model name is converted to lowercase for the collection name:
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 # Example schemas (replace with your own):
 
@@ -37,6 +37,18 @@ class Product(BaseModel):
     price: float = Field(..., ge=0, description="Price in dollars")
     category: str = Field(..., description="Product category")
     in_stock: bool = Field(True, description="Whether product is in stock")
+
+# Nutrition analyzer cache schema
+class AnalyzerCache(BaseModel):
+    """
+    Cache for analyzed ingredient lists
+    Collection name: "analyzercache"
+    """
+    ingredients: List[str] = Field(..., description="List of ingredient lines")
+    ingredients_hash: str = Field(..., description="Deterministic hash of ingredients for cache lookup")
+    result: Dict[str, Any] = Field(..., description="Raw analysis result from Edamam")
+    created_at: Optional[str] = Field(None, description="ISO timestamp for creation")
+    updated_at: Optional[str] = Field(None, description="ISO timestamp for last update")
 
 # Add your own schemas here:
 # --------------------------------------------------
