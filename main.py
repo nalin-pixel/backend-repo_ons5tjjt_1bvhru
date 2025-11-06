@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 from database import db, create_document
 
@@ -29,6 +29,20 @@ class AnalyzeResponse(BaseModel):
     cache: str
     ingredients_hash: str
     data: Dict[str, Any]
+
+
+class ApiValidateRequest(BaseModel):
+    baseUrl: HttpUrl = Field(..., description="Base URL of the API to validate")
+    path: Optional[str] = Field(None, description="Optional path to append when validating, e.g. '/health'")
+    method: Optional[str] = Field("GET", description="HTTP method to use for validation")
+
+
+class ApiValidateResponse(BaseModel):
+    ok: bool
+    status: Optional[int]
+    time_ms: Optional[int]
+    final_url: Optional[str]
+    error: Optional[str] = None
 
 
 @app.get("/")
@@ -78,6 +92,33 @@ def test_database():
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
 
     return response
+
+
+@app.post("/api/validate", response_model=ApiValidateResponse)
+def validate_api(req: ApiValidateRequest):
+    """
+    Validate that a given API base URL is reachable. Optionally append a path and use a custom method.
+    """
+    url = str(req.baseUrl).rstrip("/")
+    if req.path:
+        p = req.path if req.path.startswith("/") else f"/{req.path}"
+        url = f"{url}{p}"
+
+    method = (req.method or "GET").upper()
+
+    try:
+        start = datetime.now()
+        r = requests.request(method, url, timeout=5)
+        delta = datetime.now() - start
+        return ApiValidateResponse(
+            ok=r.status_code < 400,
+            status=r.status_code,
+            time_ms=int(delta.total_seconds() * 1000),
+            final_url=str(r.url),
+            error=None if r.status_code < 400 else r.text[:300]
+        )
+    except requests.RequestException as e:
+        return ApiValidateResponse(ok=False, status=None, time_ms=None, final_url=url, error=str(e))
 
 
 @app.post("/api/nutrition/analyze", response_model=AnalyzeResponse)
